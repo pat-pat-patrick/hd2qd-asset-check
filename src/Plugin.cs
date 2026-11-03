@@ -73,7 +73,7 @@ namespace Hd2Qd.AssetCheck
 
         public const ulong Unit = 0xE0A48D0BE9A7453F, Texture = 0xCD4238C6A0C69E32, Physics = 0x5F7203C8F280DAB8;
         const string CacheName = "vram_game_table.bin";
-        const uint CacheMagic = 0x33525648;          // "HVR3": with mips and the models' summaries
+        const uint CacheMagic = 0x34525648;          // "HVR4": with mips, the models' summaries and the game archives
 
         // -- the game's own copies ------------------------------------------------------
 
@@ -95,6 +95,9 @@ namespace Hd2Qd.AssetCheck
             public readonly Dictionary<ulong, UnitSummary> Units = new Dictionary<ulong, UnitSummary>();
             public readonly HashSet<ulong> Unreadable = new HashSet<ulong>();
             public readonly Dictionary<ulong, string> Paths = new Dictionary<ulong, string>();
+            // the game archives (packages) that hold each texture and model, at most eight: the
+            // game item it belongs to, by HD2SDK's archive names (Names.Archives)
+            public readonly Dictionary<ulong, List<ulong>> Archives = new Dictionary<ulong, List<ulong>>();
         }
 
         /// <summary>Every texture and model the game ships, by (id, type).</summary>
@@ -141,6 +144,11 @@ namespace Hd2Qd.AssetCheck
                         ulong tid = Game.U64(head, o + 8);
                         if (tid != Texture && tid != Unit && tid != Physics) continue;
                         ulong fid = Game.U64(head, o);
+                        if (tid != Physics && ulong.TryParse(pkg, System.Globalization.NumberStyles.HexNumber, null, out var archive))
+                        {
+                            if (!c.Archives.TryGetValue(fid, out var held)) c.Archives[fid] = held = new List<ulong>();
+                            if (held.Count < 8 && !held.Contains(archive)) held.Add(archive);
+                        }
                         if (!seen.Add((fid, tid))) continue;           // the first package holding it, as the scan does
                         if (tid != Physics) c.Items[(fid, tid)] = new Item { Streamed = Game.U32(head, o + 60), Resident = Game.U32(head, o + 64) };
                         rows.Add((pkg, Game.U64(head, o + 16), Game.U32(head, o + 56), fid, tid));
@@ -228,6 +236,15 @@ namespace Hd2Qd.AssetCheck
                     for (int i = 0; i < n; i++) c.Unreadable.Add(r.ReadUInt64());
                     n = r.ReadInt32();
                     for (int i = 0; i < n; i++) c.Paths[r.ReadUInt64()] = r.ReadString();
+                    n = r.ReadInt32();
+                    for (int i = 0; i < n; i++)
+                    {
+                        ulong fid = r.ReadUInt64();
+                        int k = r.ReadByte();
+                        var list = new List<ulong>(k);
+                        for (int j = 0; j < k; j++) list.Add(r.ReadUInt64());
+                        c.Archives[fid] = list;
+                    }
                     return c;
                 }
             }
@@ -263,6 +280,8 @@ namespace Hd2Qd.AssetCheck
                     }
                     w.Write(c.Unreadable.Count); foreach (var x in c.Unreadable) w.Write(x);
                     w.Write(c.Paths.Count); foreach (var kv in c.Paths) { w.Write(kv.Key); w.Write(kv.Value); }
+                    w.Write(c.Archives.Count);
+                    foreach (var kv in c.Archives) { w.Write(kv.Key); w.Write((byte)kv.Value.Count); foreach (var a in kv.Value) w.Write(a); }
                 }
                 if (File.Exists(path)) File.Delete(path);
                 File.Move(path + ".tmp", path);
@@ -340,7 +359,7 @@ namespace Hd2Qd.AssetCheck
         /// each {name, archives: [patch archive paths it deploys]}. Returns {mods: [...], total},
         /// each mod {name, level ("many": a heavier model the game may draw many of; "waste": some
         /// finding of Waste; "fine"), max, resident, game_max, extra, textures, models, new, lost,
-        /// flags: {flag: count}, items: [...]}; each item {type, id, name, path, many, flags, facts
+        /// flags: {flag: count}, items: [...]}; each item {type, id, name, archives, path, many, flags, facts
         /// (models), w, h, layers, mips, format, max, resident, in_game, game_max, game_w, game_h,
         /// game_layers, game_format}. Bytes as numbers; extra: max minus the game's copies it
         /// replaces; lost: resources a later mod overrides, left out of the rest.</summary>
@@ -362,8 +381,10 @@ namespace Hd2Qd.AssetCheck
 
             var list = new List<object>();
             long tMax = 0, tResident = 0, tGame = 0;
-            // each resource's name when a name list is there (Names): the window shows it instead of a number
+            // each resource's name when a name list is there (Names), and the game items it belongs to
+            // by HD2SDK's archive names: the window shows them instead of a number
             var names = Names.Load(home);
+            var archiveNames = Names.Archives(home);
             for (int m = 0; m < per.Count; m++)
             {
                 progress?.Invoke(0.6 + 0.4 * m / Math.Max(1, per.Count));
@@ -383,6 +404,9 @@ namespace Hd2Qd.AssetCheck
                     bool known = game.Items.TryGetValue(kv.Key, out var g);
                     var it = new Item { Resident = r.Gsz, Streamed = r.Ssz };
                     var item = new Dictionary<string, object> { ["id"] = r.Fid.ToString("x16"), ["in_game"] = known, ["name"] = names.TryGetValue(r.Fid, out var nm) ? nm : null };
+                    item["archives"] = (game.Archives.TryGetValue(r.Fid, out var held) ? held : new List<ulong>())
+                        .Where(archiveNames.ContainsKey).Select(a => archiveNames[a]).Distinct()
+                        .Select(a => (object)new Dictionary<string, object> { ["category"] = a.Category, ["name"] = a.Name }).ToList();
                     List<string> flags;
                     if (r.Tid == Texture)
                     {

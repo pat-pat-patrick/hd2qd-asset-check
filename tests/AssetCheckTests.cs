@@ -266,6 +266,25 @@ namespace Hd2Qd.AssetCheck.Tests
             Assert.Null(Json.Str(items.Single(i => Json.Str(i, "id") == N1.ToString("x16")), "name"));
         }
 
+        /// <summary>A resource the game has is named by the game archive that holds it, from
+        /// HD2SDK's archive names (the user, 2026-11-03: a character mod's models had no names).
+        /// Must live: the game's texture gets its archive's name. Must die: a texture the game does
+        /// not have gets none.</summary>
+        [Fact]
+        public void A_game_resource_is_named_by_its_archive()
+        {
+            GameData(Vanilla);
+            Directory.CreateDirectory(Path.Combine(Home, "resource_names"));
+            File.WriteAllText(Path.Combine(Home, "resource_names", "archivehashes.json"), "{\"Armor\": {\"9ba626afa44a3aa3\": \"SR-24 Street Scout\"}}");
+            Environment.SetEnvironmentVariable("HD2SDK_HASHLISTS", null);
+            const ulong Fresh = 0x9999;
+            AddMod("Probe", Texture(T1, 1, 0, 1, 1, 28), Texture(Fresh, 1, 0, 1, 1, 28));
+            var items = Json.List(ModOf(Estimate(), "Probe"), "items").Cast<Dictionary<string, object>>().ToList();
+            var named = Json.List(items.Single(i => Json.Str(i, "id") == T1.ToString("x16")), "archives").Cast<Dictionary<string, object>>().Single();
+            Assert.Equal(("Armor", "SR-24 Street Scout"), (Json.Str(named, "category"), Json.Str(named, "name")));
+            Assert.Empty(Json.List(items.Single(i => Json.Str(i, "id") == Fresh.ToString("x16")), "archives"));
+        }
+
         [Fact]
         public void A_cube_texture_counts_its_six_faces()
         {

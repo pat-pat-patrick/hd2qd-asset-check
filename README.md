@@ -10,7 +10,8 @@ each enabled mod's models and textures with the game resources they replace:
 
 The results come from the files, not from measurements in game.
 
-Resources are named ("Reflex Sight", or a path) when a name list is there: the one the
+Resources are named ("Reflex Sight", or the game item they belong to: "Armor: SR-24 Street Scout",
+or a path) when HD2SDK's name lists are there: the ones the
 [Resource names](https://github.com/pat-pat-patrick/hd2qd-resource-names) plugin downloads, or
 HD2SDK's in Blender. Without one, a resource is shown by its number.
 

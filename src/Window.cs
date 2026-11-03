@@ -71,6 +71,13 @@ namespace Hd2Qd.AssetCheck
             /// <summary>A text in the window's language (Lang\&lt;tag&gt;.json); with arguments, a
             /// first argument of 1 picks the key's _1 form where the language has one.</summary>
             string W(string key) => Words.Get(lang, key);
+            // an archive category in the window's language when it has one ("Armor" -> "护甲")
+            string Category(string c)
+            {
+                var key = "cat_" + System.Text.RegularExpressions.Regex.Replace(c ?? "", "[^A-Za-z0-9]+", "_").Trim('_');
+                var w = W(key);
+                return w == key ? c : w;
+            }
             string F(string key, params object[] args) => Words.F(lang, key, args);
 
             public async void Read()
@@ -224,7 +231,14 @@ namespace Hd2Qd.AssetCheck
             string Name(Dictionary<string, object> it)
             {
                 var listed = Str(it, "name");
-                var p = listed != null && (!listed.Contains("/") || Str(it, "path") == null) ? listed : Str(it, "path") ?? listed;
+                // a real name first; else the game items it belongs to ("护甲：SR-24 Street Scout"), by
+                // the game archives that hold it (the user, 2026-11-03: a character mod's models had none)
+                if (listed != null && !listed.Contains("/")) return listed;
+                var items = (it.TryGetValue("archives", out var av) ? av as List<object> : null)?.OfType<Dictionary<string, object>>().ToList();
+                if (items != null && items.Count > 0)
+                    return string.Join(W("sep_clause"), items.GroupBy(a => Str(a, "category"))
+                        .Select(g => F("archive_named", Category(g.Key), string.Join(" / ", g.Select(a => Str(a, "name"))))));
+                var p = listed != null && Str(it, "path") == null ? listed : Str(it, "path") ?? listed;
                 return p != null ? System.Text.RegularExpressions.Regex.Replace(p, "^content/", "") : F("model_id", Str(it, "id"));
             }
 
@@ -329,7 +343,8 @@ namespace Hd2Qd.AssetCheck
                 {
                     bool tex = Str(it, "type") == "texture";
                     string what;
-                    if (tex) what = W("texture") + (Str(it, "name") != null ? " " + Name(it) : "")
+                    bool named = Str(it, "name") != null || (it.TryGetValue("archives", out var av) && av is List<object> al && al.Count > 0);
+                    if (tex) what = W("texture") + (named ? " " + Name(it) : "")
                                     + (L(it, "w") > 0 ? " " + L(it, "w") + "×" + L(it, "h") + Layers(L(it, "layers")) + " " + Str(it, "format") : "");
                     else
                     {
