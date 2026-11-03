@@ -233,8 +233,11 @@ namespace Hd2Qd.AssetCheck
                 var listed = Str(it, "name");
                 // a real name first; else the game items it belongs to ("护甲：SR-24 Street Scout"), by
                 // the game archives that hold it (the user, 2026-11-03: a character mod's models had none)
-                if (listed != null && !listed.Contains("/")) return listed;
                 var items = (it.TryGetValue("archives", out var av) ? av as List<object> : null)?.OfType<Dictionary<string, object>>().ToList();
+                // "Helmet O-3 Free Spirit" names the same as the game item, whose category is in the
+                // window's language: the item then
+                if (listed != null && !listed.Contains("/") && (items == null || !items.Any(a => listed.IndexOf(Str(a, "name") ?? "\u0001", StringComparison.OrdinalIgnoreCase) >= 0)))
+                    return listed;
                 if (items != null && items.Count > 0)
                     return string.Join(W("sep_clause"), items.GroupBy(a => Str(a, "category"))
                         .Select(g => F("archive_named", Category(g.Key), string.Join(" / ", g.Select(a => Str(a, "name"))))));
