@@ -340,7 +340,7 @@ namespace Hd2Qd.AssetCheck
         /// each {name, archives: [patch archive paths it deploys]}. Returns {mods: [...], total},
         /// each mod {name, level ("many": a heavier model the game may draw many of; "waste": some
         /// finding of Waste; "fine"), max, resident, game_max, extra, textures, models, new, lost,
-        /// flags: {flag: count}, items: [...]}; each item {type, id, path, many, flags, facts
+        /// flags: {flag: count}, items: [...]}; each item {type, id, name, path, many, flags, facts
         /// (models), w, h, layers, mips, format, max, resident, in_game, game_max, game_w, game_h,
         /// game_layers, game_format}. Bytes as numbers; extra: max minus the game's copies it
         /// replaces; lost: resources a later mod overrides, left out of the rest.</summary>
@@ -362,6 +362,8 @@ namespace Hd2Qd.AssetCheck
 
             var list = new List<object>();
             long tMax = 0, tResident = 0, tGame = 0;
+            // each resource's name when a name list is there (Names): the window shows it instead of a number
+            var names = Names.Load(home);
             for (int m = 0; m < per.Count; m++)
             {
                 progress?.Invoke(0.6 + 0.4 * m / Math.Max(1, per.Count));
@@ -380,7 +382,7 @@ namespace Hd2Qd.AssetCheck
                     var r = kv.Value;
                     bool known = game.Items.TryGetValue(kv.Key, out var g);
                     var it = new Item { Resident = r.Gsz, Streamed = r.Ssz };
-                    var item = new Dictionary<string, object> { ["id"] = r.Fid.ToString("x16"), ["in_game"] = known };
+                    var item = new Dictionary<string, object> { ["id"] = r.Fid.ToString("x16"), ["in_game"] = known, ["name"] = names.TryGetValue(r.Fid, out var nm) ? nm : null };
                     List<string> flags;
                     if (r.Tid == Texture)
                     {

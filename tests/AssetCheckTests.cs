@@ -250,6 +250,22 @@ namespace Hd2Qd.AssetCheck.Tests
             Assert.Equal(1024L, Json.Long(t1, "game_w"));
         }
 
+        /// <summary>A resource is named from the name list the Resource names plugin downloads into
+        /// the settings folder (the user, 2026-11-03). Must live: the one in the list has its name.
+        /// Must die: the one not in it has none, and keeps its number.</summary>
+        [Fact]
+        public void A_resource_in_the_name_list_is_named()
+        {
+            GameData(Vanilla);
+            Directory.CreateDirectory(Path.Combine(Home, "resource_names"));
+            File.WriteAllText(Path.Combine(Home, "resource_names", "friendlynames.txt"), T2.ToString() + " Helmet O-3 Free Spirit\n");
+            Environment.SetEnvironmentVariable("HD2SDK_HASHLISTS", null);
+            AddMod("Sky", Texture(T2, 900, 0, 256, 256, 28, 1, true), Texture(N1, 50, 0, 64, 64, 28, 2));
+            var items = Json.List(ModOf(Estimate(), "Sky"), "items").Cast<Dictionary<string, object>>().ToList();
+            Assert.Equal("Helmet O-3 Free Spirit", Json.Str(items.Single(i => Json.Str(i, "id") == T2.ToString("x16")), "name"));
+            Assert.Null(Json.Str(items.Single(i => Json.Str(i, "id") == N1.ToString("x16")), "name"));
+        }
+
         [Fact]
         public void A_cube_texture_counts_its_six_faces()
         {

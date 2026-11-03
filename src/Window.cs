@@ -219,10 +219,13 @@ namespace Hd2Qd.AssetCheck
                 return line;
             }
 
+            // a resource by its name in the name list ("Reflex Sight"); for a path, the game's own
+            // (the list has some cut short: "mple_pouch/sample_pouch"); else its number
             string Name(Dictionary<string, object> it)
             {
-                var p = Str(it, "path");
-                return p != null ? System.Text.RegularExpressions.Regex.Replace(p, "^[^/]*/", "") : F("model_id", Str(it, "id"));
+                var listed = Str(it, "name");
+                var p = listed != null && (!listed.Contains("/") || Str(it, "path") == null) ? listed : Str(it, "path") ?? listed;
+                return p != null ? System.Text.RegularExpressions.Regex.Replace(p, "^content/", "") : F("model_id", Str(it, "id"));
             }
 
             /// <summary>What a mod's findings mean, worst first (asset_check_src page.html's words):
@@ -326,7 +329,8 @@ namespace Hd2Qd.AssetCheck
                 {
                     bool tex = Str(it, "type") == "texture";
                     string what;
-                    if (tex) what = W("texture") + (L(it, "w") > 0 ? " " + L(it, "w") + "×" + L(it, "h") + Layers(L(it, "layers")) + " " + Str(it, "format") : "");
+                    if (tex) what = W("texture") + (Str(it, "name") != null ? " " + Name(it) : "")
+                                    + (L(it, "w") > 0 ? " " + L(it, "w") + "×" + L(it, "h") + Layers(L(it, "layers")) + " " + Str(it, "format") : "");
                     else
                     {
                         var g = Tris(it, "game", "mod");

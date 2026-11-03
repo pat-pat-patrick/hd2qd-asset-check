@@ -10,6 +10,10 @@ each enabled mod's models and textures with the game resources they replace:
 
 The results come from the files, not from measurements in game.
 
+Resources are named ("Reflex Sight", or a path) when a name list is there: the one the
+[Resource names](https://github.com/pat-pat-patrick/hd2qd-resource-names) plugin downloads, or
+HD2SDK's in Blender. Without one, a resource is shown by its number.
+
 ## Use
 
 1. In HD2 Mod Quick Deploy, open the Plugins page (the jigsaw piece beside the gear).
