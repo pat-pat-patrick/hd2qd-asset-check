@@ -176,7 +176,7 @@ namespace Hd2Qd.AssetCheck.Tests
 
         Dictionary<string, object> Host() => new Dictionary<string, object>
         {
-            ["home"] = Home, ["data"] = Data, ["zh"] = false,
+            ["home"] = Home, ["data"] = Data, ["lang"] = "en",
             ["mods"] = (Func<List<Dictionary<string, object>>>)(() => mods),
         };
 
@@ -201,14 +201,16 @@ namespace Hd2Qd.AssetCheck.Tests
 
         Dictionary<string, object> Estimate() => Plugin.Estimate(Home, Data, mods, null);
 
-        /// <summary>What the manager reads of it: a window plugin of Api 1, its names and its command.</summary>
+        /// <summary>What the manager reads of it: a window plugin of Api 2, its names and its command.</summary>
         [Fact]
         public void The_plugin_says_its_kind_names_and_command()
         {
-            Assert.Equal(1, Plugin.Api);
+            Assert.Equal(2, Plugin.Api);
             Assert.Equal("window", Plugin.Kind);
-            Assert.Equal("资源检查", Plugin.Title(true));
-            Assert.Equal("Asset check", Plugin.Title(false));
+            Assert.Equal("Asset check", Plugin.Title("en"));
+            Assert.Equal("资源检查", Plugin.Title("zh-CN"));
+            Assert.StartsWith("检查各已启用 MOD", Plugin.Summary("zh-CN"));
+            Assert.StartsWith("Checks how well", Plugin.Summary("en"));
             Assert.NotNull(typeof(Plugin).GetMethod("Open"));
             Assert.Equal("asset-check", Plugin.Commands[0][0]);
         }
@@ -337,6 +339,127 @@ namespace Hd2Qd.AssetCheck.Tests
             Assert.True(said.IndexOf("Big", StringComparison.Ordinal) < said.IndexOf("Small", StringComparison.Ordinal), said);
             Assert.Contains("not measured in game", said);
             Assert.Contains("+30.0 MB", said);
+        }
+
+        /// <summary>Api 2: a language tag, looked up exactly, then by its language alone, then in English.</summary>
+        [Fact]
+        public void A_language_without_a_file_falls_back_to_English()
+        {
+            Assert.Equal("Asset check", Plugin.Title("de"));
+            Assert.Equal("Asset check", Plugin.Title("zh-TW"));       // no zh-TW and no zh file
+            Assert.Equal("Asset check", Plugin.Title(null));
+            Assert.Equal("资源检查", Plugin.Title("ZH-cn"));           // tags are matched without case
+            Assert.Equal(Plugin.Summary("en"), Plugin.Summary("de-AT"));
+        }
+
+        static Dictionary<string, Dictionary<string, string>> LanguageFiles()
+        {
+            var asm = typeof(Plugin).Assembly;
+            var all = new Dictionary<string, Dictionary<string, string>>();
+            foreach (var name in asm.GetManifestResourceNames().Where(n => n.StartsWith("Lang.") && n.EndsWith(".json")))
+                using (var r = new StreamReader(asm.GetManifestResourceStream(name)))
+                    all[name.Substring(5, name.Length - 10)] = new System.Web.Script.Serialization.JavaScriptSerializer().Deserialize<Dictionary<string, string>>(r.ReadToEnd());
+            return all;
+        }
+
+        static string Holes(string text) =>
+            string.Join(",", System.Text.RegularExpressions.Regex.Matches(text, @"\{(\d+)\}").Cast<System.Text.RegularExpressions.Match>()
+                .Select(m => int.Parse(m.Groups[1].Value)).Distinct().OrderBy(n => n));
+
+        /// <summary>Every language's keys are English keys, with the same placeholders (a key_1 may
+        /// write its count out), and every English key with a count but no _1 form is not one.</summary>
+        [Fact]
+        public void Each_language_file_has_the_English_keys_and_placeholders()
+        {
+            var files = LanguageFiles();
+            Assert.Contains("en", files.Keys);
+            Assert.Contains("zh-CN", files.Keys);
+            var en = files["en"];
+            foreach (var lang in files)
+                foreach (var kv in lang.Value)
+                {
+                    bool one = kv.Key.EndsWith("_1");
+                    var key = one ? kv.Key.Substring(0, kv.Key.Length - 2) : kv.Key;
+                    Assert.True(en.ContainsKey(key), lang.Key + ": " + kv.Key + " is not an English key");
+                    var want = Holes(en[key]);
+                    var got = Holes(kv.Value);
+                    if (one) Assert.True(got == want || got == string.Join(",", want.Split(',').Where(h => h != "0")), lang.Key + ": " + kv.Key + " has {" + got + "}, English {" + want + "}");
+                    else Assert.True(got == want, lang.Key + ": " + kv.Key + " has {" + got + "}, English {" + want + "}");
+                }
+            foreach (var key in en.Keys.Where(k => !k.EndsWith("_1")))
+                Assert.True(files["zh-CN"].ContainsKey(key), "zh-CN lacks " + key);
+        }
+
+        /// <summary>The window's text in each language: all of it from the language's file (no
+        /// key shown as itself, no placeholder left), with a singular and a plural count.</summary>
+        [Fact]
+        public void The_window_shows_each_language_from_its_file()
+        {
+            GameData(Vanilla);
+            AddMod("First", Texture(T1, 5000, 0, 1024, 1024, 28), Texture(0x7777, 1000, 3000, 512, 256, 98));   // T1 goes to Textures
+            AddMod("Textures",
+                Texture(T1, 1400000, 0, 1024, 1024, 98),
+                Texture(N1, 4194304, 0, 1024, 1024, 28, mips: 1),
+                Texture(0x6666, 22369621, 0, 4096, 4096, 98),
+                Texture(T2, 600, 0, 128, 128, 28, 1, true));
+            AddMod("Scripts only", new G { Type = Material, Id = M1, Res = 10 });
+            var r = Estimate();
+            var files = LanguageFiles();
+            var values = new HashSet<string>(files.Values.SelectMany(f => f.Values));
+            foreach (var lang in new[] { "en", "zh-CN" })
+            {
+                var texts = WindowTexts(lang, r);
+                foreach (var t in texts)
+                {
+                    Assert.DoesNotMatch(@"\{\d+\}", t);
+                    Assert.False(System.Text.RegularExpressions.Regex.IsMatch(t, "^[a-z][a-z0-9_]*$") && !values.Contains(t), lang + ": a key shown as itself: " + t);
+                }
+                var shown = Json.List(r, "mods").Cast<Dictionary<string, object>>().Where(m => Json.Long(m, "textures") + Json.Long(m, "models") > 0).ToList();
+                Assert.Equal(2, shown.Count);
+                int review = shown.Count(m => Json.Str(m, "level") == "many"), waste = shown.Count(m => Json.Str(m, "level") == "waste");
+                Assert.Contains(lang == "en" ? "2 mods contain models or textures: " + review + " to review, " + waste + " inefficient, " + (2 - review - waste) + " normal."
+                                             : "2 个 MOD 包含模型或贴图：" + review + " 个需检查，" + waste + " 个可优化，" + (2 - review - waste) + " 个正常。", texts);
+                Assert.Contains(lang == "en" ? "1 other enabled mod contains no models or textures." : "另有 1 个已启用的 MOD 不包含模型或贴图。", texts);
+                Assert.Contains(lang == "en" ? "1 of its resources is overridden by a mod loaded later and is not counted." : "其中 1 个资源被后加载的 MOD 覆盖，未计入。", texts);
+                Assert.Contains(lang == "en" ? "Textures without mipmaps" : "贴图缺少 mipmap", texts);
+                Assert.Contains(lang == "en" ? "1 texture. It shimmers at a distance, and the full image is read even when it covers only a few pixels."
+                                             : "共 1 张。远距离显示时会闪烁，且仅占数个像素时仍读取整张贴图。", texts);
+            }
+        }
+
+        /// <summary>Every text, tooltip and button label of the plugin's window content for r in
+        /// lang, with every mod's details open (on a thread of its own, as WPF needs).</summary>
+        static List<string> WindowTexts(string lang, Dictionary<string, object> r)
+        {
+            var texts = new List<string>();
+            Exception failed = null;
+            var t = new System.Threading.Thread(() =>
+            {
+                try
+                {
+                    var view = typeof(Plugin).GetNestedType("View", BindingFlags.NonPublic);
+                    var v = Activator.CreateInstance(view, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null,
+                        new object[] { (Func<List<Dictionary<string, object>>>)(() => new List<Dictionary<string, object>>()), "", "", lang }, null);
+                    var opened = (HashSet<string>)view.GetField("opened", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(v);
+                    foreach (Dictionary<string, object> m in (List<object>)r["mods"]) opened.Add(Json.Str(m, "name"));
+                    view.GetMethod("Show", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(v, new object[] { r });
+                    void Walk(object o)
+                    {
+                        if (o is System.Windows.Controls.TextBlock tb) texts.Add(tb.Text);
+                        if (o is System.Windows.FrameworkElement fe && fe.ToolTip is string tip) texts.Add(tip);
+                        if (o is System.Windows.Controls.ContentControl cc && cc.Content is string c) texts.Add(c);
+                        if (o is System.Windows.DependencyObject d)
+                            foreach (var child in System.Windows.LogicalTreeHelper.GetChildren(d)) Walk(child);
+                    }
+                    Walk(view.GetField("Root").GetValue(v));
+                }
+                catch (Exception e) { failed = e; }
+            });
+            t.SetApartmentState(System.Threading.ApartmentState.STA);
+            t.Start();
+            t.Join();
+            if (failed != null) throw new Exception("the window failed in " + lang, failed);
+            return texts;
         }
     }
 }

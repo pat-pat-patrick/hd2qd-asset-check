@@ -11,7 +11,7 @@
     <Nullable>disable</Nullable>
     <AssemblyName>HD2QD.AssetCheck</AssemblyName>
     <RootNamespace>Hd2Qd.AssetCheck</RootNamespace>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <Product>HD2QD Asset Check</Product>
     <Company>pat-pat-patrick</Company>
     <Copyright>MIT License</Copyright>
@@ -27,6 +27,12 @@
 
   <ItemGroup>
     <Compile Include="*.cs" />
+  </ItemGroup>
+
+  <!-- the text, one file per language (Lang\<tag>.json), embedded as Lang.<tag>.json: Words.cs -->
+  <ItemGroup>
+    <EmbeddedResource Include="Lang\*.json" LogicalName="Lang.%(Filename).json" />
+    <Reference Include="System.Web.Extensions" />
   </ItemGroup>
 
 </Project>

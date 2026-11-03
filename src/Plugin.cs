@@ -20,13 +20,18 @@ namespace Hd2Qd.AssetCheck
     public static partial class Plugin
     {
         /// <summary>Raised when the calls change shape; the manager refuses a plugin of another Api.</summary>
-        public const int Api = 1;
+        public const int Api = 2;
         /// <summary>"window": the plugin has a window of its own, opened from its card.</summary>
         public const string Kind = "window";
 
-        public static string Title(bool zh) => zh ? "资源检查" : "Asset check";
+        /// <summary>In lang, a language tag ("en", "pt-BR"): the text comes from that language's
+        /// file in Lang\, else English (Words).</summary>
+        public static string Title(string lang) => Words.Get(lang, "title");
 
-        /// <summary>The command it adds to the manager's command line (hd2qd asset-check).</summary>
+        public static string Summary(string lang) => Words.Get(lang, "summary");
+
+        /// <summary>The command it adds to the manager's command line (hd2qd asset-check). The
+        /// command line is English, so its help and output are not in Lang\.</summary>
         public static readonly string[][] Commands =
         {
             new[] { "asset-check", "check each enabled mod's models and textures against the game resources they replace: detail levels, triangles, shadows, culling boxes, lights, mipmaps, compression, video memory (from the files, not measured in game)" },
@@ -65,10 +70,6 @@ namespace Hd2Qd.AssetCheck
             o.WriteLine("total: " + Mb(L(t, "max")) + " at most if everything were loaded, " + Extra(L(t, "extra")) + " than the game's copies they replace");
             return 0;
         }
-
-        public static string Summary(bool zh) => zh
-            ? "检查各已启用 MOD 的模型与贴图的优化情况（细节层级、三角面数、阴影、剔除盒、灯光、mipmap、压缩），并估算其显存占用，与所替换的原版资源对比。"
-            : "Checks how well each enabled mod's models and textures are optimized (detail levels, triangle counts, shadows, culling boxes, lights, mipmaps, compression) and estimates their video memory use against the game resources they replace.";
 
         public const ulong Unit = 0xE0A48D0BE9A7453F, Texture = 0xCD4238C6A0C69E32, Physics = 0x5F7203C8F280DAB8;
         const string CacheName = "vram_game_table.bin";
