@@ -13,6 +13,9 @@ namespace Hd2Qd.AssetCheck
     public static partial class Plugin
     {
         static Window open;
+        // the tab of the manager's window it is in, while one is open (a manager that has tabs)
+        static Action showTab;
+        static View tabView;
 
         /// <summary>The plugin's window, beside the manager's (owner). host, as the manager gives
         /// every window plugin: "home" (its settings folder: the game table's cache), "data" (the
@@ -24,8 +27,19 @@ namespace Hd2Qd.AssetCheck
             var mods = (Func<List<Dictionary<string, object>>>)host["mods"];
             string home = (string)host["home"], data = (string)host["data"];
             var lang = Words.Lang(host);
+            if (showTab != null) { showTab(); tabView.Read(); return; }
             if (open != null) { open.Activate(); ((View)open.Tag).Read(); return; }
             var v = new View(mods, home, data, lang);
+            // a tab of the manager's window when it has them (Quick Deploy 0.25.0, the user,
+            // 2026-11-26: plugin windows piled up); else a window of its own
+            if (host.TryGetValue("tab", out var tk) && tk is Func<string, FrameworkElement, Action, Dictionary<string, object>> tab)
+            {
+                tabView = v;
+                var handle = tab(Title(lang), v.Root, () => { tabView = null; showTab = null; });
+                showTab = handle.TryGetValue("show", out var sh) ? sh as Action : null;
+                v.Read();
+                return;
+            }
             // the manager makes the window, so its caption matches the main one; a plain window
             // (the system's caption) when it did not hand one over (an older manager)
             Window w;
