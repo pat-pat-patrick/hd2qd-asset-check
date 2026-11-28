@@ -35,6 +35,9 @@ namespace Hd2Qd.AssetCheck
             if (host.TryGetValue("tab", out var tk) && tk is Func<string, FrameworkElement, Action, Dictionary<string, object>> tab)
             {
                 tabView = v;
+                // in a tab, a column in the middle as wide as the manager's own pages, not the
+                // whole window (the user, 2026-11-28: "太分散到两边了")
+                v.Root.MaxWidth = 1100;
                 var handle = tab(Title(lang), v.Root, () => { tabView = null; showTab = null; });
                 showTab = handle.TryGetValue("show", out var sh) ? sh as Action : null;
                 v.Read();

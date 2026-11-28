@@ -11,7 +11,7 @@
   "head_counts_1": "1 mod contains models or textures: {1} to review, {2} inefficient, {3} normal.",
   "others_none": "{0} other enabled mods contain no models or textures.",
   "others_none_1": "1 other enabled mod contains no models or textures.",
-  "col_mod": "MOD",
+  "col_mod": "Mod",
   "col_status": "Status",
   "col_finding": "Main finding",
   "col_vram": "VRAM vs. game",
